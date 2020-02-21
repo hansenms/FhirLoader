@@ -15,15 +15,27 @@ namespace FhirLoader
 {
     class Program
     {
-        private static readonly HttpClient httpClient = new HttpClient();
-        static void Main(string inputFolder, Uri fhirServerUrl, Uri authority = null, string clientId = null, string clientSecret = null, string bufferFileName = "resources.json", bool reCreateBufferIfExists = false, int maxDegreeOfParallelism = 64)
+        static void Main(
+            string inputFolder,
+            Uri fhirServerUrl,
+            Uri authority = null,
+            string clientId = null,
+            string clientSecret = null,
+            string bufferFileName = "resources.json",
+            bool reCreateBufferIfExists = false,
+            int maxDegreeOfParallelism = 8,
+            int refreshInterval = 5)
         {
 
+            HttpClient httpClient = new HttpClient();
             MetricsCollector metrics = new MetricsCollector();
 
+            // Create an ndjson file from the FHIR bundles in folder
             if (!(new FileInfo(bufferFileName).Exists) || reCreateBufferIfExists)
             {
+                Console.WriteLine("Creating ndjson buffer file...");
                 CreateBufferFile(inputFolder, bufferFileName);
+                Console.WriteLine("Buffer created.");
             }
 
             AuthenticationContext authContext = new AuthenticationContext(authority.AbsoluteUri, new TokenCache());;
@@ -83,15 +95,17 @@ namespace FhirLoader
                 }
             );
 
+            // Start output on timer
             var t = new Task( () => {
                 while (true)
                 {
-                    Thread.Sleep(1000);
+                    Thread.Sleep(1000 * refreshInterval);
                     Console.WriteLine($"Resources per second: {metrics.EventsPerSecond}");
                 }
             });
             t.Start();
 
+            // Read the ndjson file and feed it to the threads
             System.IO.StreamReader buffer = new System.IO.StreamReader(bufferFileName);
             string line;
             while ((line = buffer.ReadLine()) != null)
@@ -99,7 +113,7 @@ namespace FhirLoader
                 actionBlock.Post(line);
             }
 
-            actionBlock.Complete();            
+            actionBlock.Complete();
             actionBlock.Completion.Wait();
         }
 
