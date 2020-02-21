@@ -38,8 +38,10 @@ namespace FhirLoader
                 Console.WriteLine("Buffer created.");
             }
 
-            AuthenticationContext authContext = new AuthenticationContext(authority.AbsoluteUri, new TokenCache());;
-            ClientCredential clientCredential = new ClientCredential(clientId, clientSecret);
+            bool useAuth = authority != null && clientId != null && clientSecret != null;
+
+            AuthenticationContext authContext = useAuth ? new AuthenticationContext(authority.AbsoluteUri, new TokenCache()) : null;
+            ClientCredential clientCredential = useAuth ? new ClientCredential(clientId, clientSecret) : null;
 
             var randomGenerator = new Random();
 
@@ -60,8 +62,6 @@ namespace FhirLoader
                                 TimeSpan.FromMilliseconds(5000 + randomGenerator.Next(50)),
                                 TimeSpan.FromMilliseconds(8000 + randomGenerator.Next(50))
                         };
-
-                var authResult = authContext.AcquireTokenAsync(fhirServerUrl.AbsoluteUri.TrimEnd('/'), clientCredential).Result;
  
                 HttpResponseMessage uploadResult = await Policy
                     .HandleResult<HttpResponseMessage>(response => !response.IsSuccessStatusCode)
@@ -76,7 +76,13 @@ namespace FhirLoader
                             : new HttpRequestMessage(HttpMethod.Put, new Uri(fhirServerUrl, $"/{resource_type}/{id}"));
 
                         message.Content = content;
-                        message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", authResult.AccessToken);
+
+                        if (useAuth)
+                        {
+                            var authResult = authContext.AcquireTokenAsync(fhirServerUrl.AbsoluteUri.TrimEnd('/'), clientCredential).Result;
+                            message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", authResult.AccessToken);
+                        }
+
                         return httpClient.SendAsync(message);
                     });
 
