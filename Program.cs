@@ -23,6 +23,7 @@ namespace FhirLoader
             string clientSecret = null,
             string bufferFileName = "resources.json",
             bool reCreateBufferIfExists = false,
+            bool forcePost = false,
             int maxDegreeOfParallelism = 8,
             int refreshInterval = 5)
         {
@@ -60,18 +61,23 @@ namespace FhirLoader
                                 TimeSpan.FromMilliseconds(2000 + randomGenerator.Next(50)),
                                 TimeSpan.FromMilliseconds(3000 + randomGenerator.Next(50)),
                                 TimeSpan.FromMilliseconds(5000 + randomGenerator.Next(50)),
-                                TimeSpan.FromMilliseconds(8000 + randomGenerator.Next(50))
+                                TimeSpan.FromMilliseconds(8000 + randomGenerator.Next(50)),
+                                TimeSpan.FromMilliseconds(12000 + randomGenerator.Next(50)),
+                                TimeSpan.FromMilliseconds(16000 + randomGenerator.Next(50)),
                         };
  
                 HttpResponseMessage uploadResult = await Policy
                     .HandleResult<HttpResponseMessage>(response => !response.IsSuccessStatusCode)
                     .WaitAndRetryAsync(pollyDelays, (result, timeSpan, retryCount, context) =>
                     {
-                        Console.WriteLine($"Request failed with {result.Result.StatusCode}. Waiting {timeSpan} before next retry. Retry attempt {retryCount}");
+                        if (retryCount > 3)
+                        {
+                            Console.WriteLine($"Request failed with {result.Result.StatusCode}. Waiting {timeSpan} before next retry. Retry attempt {retryCount}");
+                        }
                     })
                     .ExecuteAsync(() =>
                     {
-                        var message = string.IsNullOrEmpty(id)
+                        var message = forcePost || string.IsNullOrEmpty(id)
                             ? new HttpRequestMessage(HttpMethod.Post, new Uri(fhirServerUrl, $"/{resource_type}"))
                             : new HttpRequestMessage(HttpMethod.Put, new Uri(fhirServerUrl, $"/{resource_type}/{id}"));
 
