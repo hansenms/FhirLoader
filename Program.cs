@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using Newtonsoft.Json;
@@ -17,6 +18,8 @@ namespace FhirLoader
         private static readonly HttpClient httpClient = new HttpClient();
         static void Main(string inputFolder, Uri fhirServerUrl, Uri authority = null, string clientId = null, string clientSecret = null, string bufferFileName = "resources.json", bool reCreateBufferIfExists = false, int maxDegreeOfParallelism = 64)
         {
+
+            MetricsCollector metrics = new MetricsCollector();
 
             if (!(new FileInfo(bufferFileName).Exists) || reCreateBufferIfExists)
             {
@@ -71,12 +74,23 @@ namespace FhirLoader
                     Console.WriteLine(resultContent);
                     throw new Exception($"Unable to upload to server. Error code {uploadResult.StatusCode}");
                 }
+
+                metrics.Collect(DateTime.Now);
             },
                 new ExecutionDataflowBlockOptions
                 {
                     MaxDegreeOfParallelism = maxDegreeOfParallelism
                 }
             );
+
+            var t = new Task( () => {
+                while (true)
+                {
+                    Thread.Sleep(1000);
+                    Console.WriteLine($"Resources per second: {metrics.EventsPerSecond}");
+                }
+            });
+            t.Start();
 
             System.IO.StreamReader buffer = new System.IO.StreamReader(bufferFileName);
             string line;
@@ -85,7 +99,7 @@ namespace FhirLoader
                 actionBlock.Post(line);
             }
 
-            actionBlock.Complete();
+            actionBlock.Complete();            
             actionBlock.Completion.Wait();
         }
 
