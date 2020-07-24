@@ -14,6 +14,7 @@ Options:
   --authority <authority>                                    authority
   --client-id <client-id>                                    clientId
   --client-secret <client-secret>                            clientSecret
+  --access-token <access-token>                              accessToken
   --buffer-file-name <buffer-file-name>                      bufferFileName
   --re-create-buffer-if-exists                               reCreateBufferIfExists
   --max-degree-of-parallelism <max-degree-of-parallelism>    maxDegreeOfParallelism
@@ -22,8 +23,32 @@ Options:
   -?, -h, --help                                             Show help and usage information
 ```
 
-For example:
+## Examples
+
+### Authenticating with client id and secret
 
 ```shell
 dotnet run -- --client-secret "XXXX" --client-id "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" --input-folder ..\synthea\output\fhir\ --authority "https://login.microsoftonline.com/{tenant-id}" --fhir-server-url "https://{myfhirserver}.azurehealthcareapis.com" --max-degree-of-parallelism 14
+```
+
+### Authenticating with Azure CLI
+
+```pwsh
+$fhirServerUrl = "https://{myfhirserver}.azurehealthcareapis.com"
+$inputFolder = "..\synthea\output\fhir\"
+
+# enable healthcare plugin for Azure CLI
+az extension add --name healthcareapis
+
+# authorize user to access FHIR service
+az role assignment create `
+  --assignee $(az account show --query 'user.name' --output tsv) `
+  --scope $(az healthcareapis service list --query "[?properties.authenticationConfiguration.audience=='$fhirServerUrl'].id" --output tsv) `
+  --role 'FHIR Data Contributor'
+
+# run loader
+dotnet run -- `
+  --access-token $(az account get-access-token --resource $fhirServerUrl --query accessToken --output tsv) `
+  --fhir-server-url $fhirServerUrl `
+  --input-folder $inputFolder
 ```
