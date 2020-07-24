@@ -21,6 +21,7 @@ namespace FhirLoader
             Uri authority = null,
             string clientId = null,
             string clientSecret = null,
+            string accessToken = null,
             string bufferFileName = "resources.json",
             bool reCreateBufferIfExists = false,
             bool forcePost = false,
@@ -39,7 +40,7 @@ namespace FhirLoader
                 Console.WriteLine("Buffer created.");
             }
 
-            bool useAuth = authority != null && clientId != null && clientSecret != null;
+            bool useAuth = authority != null && clientId != null && clientSecret != null && accessToken == null;
 
             AuthenticationContext authContext = useAuth ? new AuthenticationContext(authority.AbsoluteUri, new TokenCache()) : null;
             ClientCredential clientCredential = useAuth ? new ClientCredential(clientId, clientSecret) : null;
@@ -87,6 +88,10 @@ namespace FhirLoader
                         {
                             var authResult = authContext.AcquireTokenAsync(fhirServerUrl.AbsoluteUri.TrimEnd('/'), clientCredential).Result;
                             message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", authResult.AccessToken);
+                        }
+                        else if (accessToken != null)
+                        {
+                            message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
                         }
 
                         return httpClient.SendAsync(message);
